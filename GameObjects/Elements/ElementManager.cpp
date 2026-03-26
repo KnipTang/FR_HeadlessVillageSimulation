@@ -9,8 +9,18 @@ ElementManager::ElementManager() :
 	Rev::GameObject(),
 	m_ElementMap{},
 	m_CycleState{ CycleState::Night },
-	m_CurrentTime{}
+	m_CurrentCycleTime{}
 {
+
+	m_NumAgentThreads = std::min(
+		static_cast<size_t>(std::thread::hardware_concurrency()),
+		(static_cast<size_t>(g_AgentsCount) + m_AgentOnOneThreadCount - 1) / m_AgentOnOneThreadCount
+	);
+
+	m_AgentThreadPool = std::make_unique<ThreadPool>(m_NumAgentThreads);
+
+	m_PlaceElementsThreadPool = std::make_unique<ThreadPool>(g_AgentsCount + g_FiniteResourcesCount + g_HousesCount);
+
 	for (int i = 0; i < g_FiniteResourcesCount; i++)
 	{
 		m_FiniteResources.emplace_back(dynamic_cast<ResourceElement*>(AddChild(std::make_unique<ResourceElement>(g_FiniteResourceID, GREEN))));
@@ -30,7 +40,9 @@ ElementManager::ElementManager() :
 
 		AgentElement* agentPtr = m_Agents.back();
 
-		PlaceElementOnRandomGridPosition(*agentPtr); 
+		m_PlaceElementsThreadPool.get()->enqueue([this, agentPtr]() {
+			PlaceElementOnRandomGridPosition(*agentPtr);
+		});
 
 		m_Elements.emplace_back(agentPtr);
 	}
@@ -51,11 +63,6 @@ ElementManager::ElementManager() :
 
 		m_Elements.emplace_back(houseElemPtr);
 	}
-
-	m_NumThreads = std::min(
-		static_cast<size_t>(std::thread::hardware_concurrency()),
-		(m_Agents.size() + m_AgentOnOneThreadCount - 1) / m_AgentOnOneThreadCount
-	);
 }
 
 ElementManager::~ElementManager()
@@ -68,49 +75,40 @@ void ElementManager::Init()
 	SpawnResources(m_HouseResources);
 }
 
-void ElementManager::Update(float deltaTime)
+void ElementManager::UpdateElements(float currentTime)
 {
-	m_CurrentTime += deltaTime;
+	m_CurrentCycleTime += currentTime;
 
-	if (m_CycleState == CycleState::Night && m_CurrentTime < g_DayTime)
+	if (m_CycleState == CycleState::Night && m_CurrentCycleTime < g_DayTime)
 	{
 		StartMorning();
 		m_CycleState = CycleState::Day;
 	}
 
-	if (m_CycleState == CycleState::Day && m_CurrentTime >= g_DayTime)
+	if (m_CycleState == CycleState::Day && m_CurrentCycleTime >= g_DayTime)
 	{
 		StartNight();
 		m_CycleState = CycleState::Night;
 	}
 
-	if (m_CurrentTime >= g_DayTime + g_NightTime)
+	if (m_CurrentCycleTime >= g_DayTime + g_NightTime)
 	{
 		EndDayCycle();
-		m_CurrentTime = 0;
+		m_CurrentCycleTime = 0;
 	}
 
-	std::vector<std::thread> threads;
-
-	for (size_t t = 0; t < m_NumThreads; ++t)
+	for (size_t t = 0; t < m_NumAgentThreads; ++t)
 	{
 		size_t start = t * m_AgentOnOneThreadCount;
 		size_t end = std::min(start + m_AgentOnOneThreadCount, m_Agents.size());
 
-		threads.emplace_back([this, deltaTime, start, end]() {
+		m_AgentThreadPool.get()->enqueue([this, start, end]() {
 			for (size_t i = start; i < end; ++i)
 			{
-				m_Agents[i]->UpdateMovement(deltaTime);
+				m_Agents[i]->UpdateMovement();
 			}
-			});
+		});
 	}
-
-	for (auto& thread : threads)
-	{
-		thread.join();
-	}
-
-	GameObject::Update(deltaTime);
 }
 
 void ElementManager::StartMorning()

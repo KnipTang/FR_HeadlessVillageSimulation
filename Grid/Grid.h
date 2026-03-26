@@ -10,10 +10,12 @@ namespace Rev {
 
 class ElementManager;
 
+class ThreadPool;
+
 class Grid : public Rev::GameObject
 {
 public:
-	Grid();
+	Grid(bool displayGrid = true);
 	~Grid();
 
 	Grid(const Grid& other) = default;
@@ -29,7 +31,9 @@ private:
 	ElementManager* m_ElementManager;
 
 	float m_CurrentTime;
-	float m_DisplayRefreshTime;
+	float m_UpdateGridTime;
+
+	bool m_DisplayGrid;
 
 private:
 	void DisplayGrid();

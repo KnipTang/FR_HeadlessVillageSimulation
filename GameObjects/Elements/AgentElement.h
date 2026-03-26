@@ -18,13 +18,12 @@ public:
 	AgentElement(ElementManager& elementManager, unsigned char typeID = 0, const char* gridColor = YELLOW);
 	~AgentElement();
 
-	//virtual void Update(float deltaTime) override;
-
-	void UpdateMovement(float deltaTime);
+	void UpdateMovement();
 	
 	void UpdateAgentState(AgentState agentState);
 
 	void SetCurrentResourceTarget(ResourceElement* resourceTarget);
+	bool HasCurrentResourceTarget() { return m_CurrentResourceTarget; }
 private:
 	void MoveToTarget();
 	// Direction -> 1 = right || -1 = left

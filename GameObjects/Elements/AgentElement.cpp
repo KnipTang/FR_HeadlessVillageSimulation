@@ -1,6 +1,8 @@
 #include "AgentElement.h"
 #include "ResourceElement.h"
 #include "ElementManager.h"
+#include "../../SimulationConfig.h"
+#include <thread>
 
 AgentElement::AgentElement(ElementManager& elementManager, unsigned char typeID, const char* gridColor) :
 	BaseElement(typeID, gridColor),
@@ -15,16 +17,9 @@ AgentElement::~AgentElement()
 
 }
 
-void AgentElement::UpdateMovement(float deltaTime)
+void AgentElement::UpdateMovement()
 {
-    m_CurrentTime += deltaTime;
-
-    if (m_CurrentTime >= m_MoveUpdateTime)
-    {
-        m_CurrentTime = 0;
-
-        MoveToTarget();
-    }
+    MoveToTarget();
 }
 
 void AgentElement::UpdateAgentState(AgentState agentState)
@@ -40,6 +35,8 @@ void AgentElement::SetCurrentResourceTarget(ResourceElement* resourceTarget)
 
 void AgentElement::MoveToTarget()
 {
+    burnCPU(0.03f);
+
     if (!m_CurrentResourceTarget)
         return;
 
@@ -83,7 +80,10 @@ void AgentElement::MoveUp(signed char direction)
 
 void AgentElement::ResourceCollected()
 {
-    m_CurrentResourceTarget->OnCollect();
+    std::jthread([this]() {
+        m_CurrentResourceTarget->OnCollect();
+        m_CurrentResourceTarget = nullptr;
+    });
 
     if (m_ElementManager.GetCycleState() == CycleState::Day)
     {

@@ -8,9 +8,10 @@
 #include <stdlib.h>
 #include "GridConsoleColors.h"
 
-Grid::Grid() :
+Grid::Grid(bool displayGrid) :
 	m_CurrentTime{},
-	m_DisplayRefreshTime{1.f}
+	m_UpdateGridTime{1.f},
+	m_DisplayGrid{ displayGrid }
 {
 	m_ElementManager = dynamic_cast<ElementManager*>(AddChild(std::make_unique<ElementManager>()));
 
@@ -34,8 +35,10 @@ Grid::~Grid()
 void Grid::Update(float deltaTime)
 {
 	m_CurrentTime += deltaTime;
-	if (m_CurrentTime >= m_DisplayRefreshTime)
+	if (m_CurrentTime >= m_UpdateGridTime)
 	{
+		m_ElementManager->UpdateElements(m_CurrentTime);
+
 		m_CurrentTime = 0;
 
 		{
@@ -65,16 +68,19 @@ void Grid::DisplayGrid()
 		}
 	}
 
-	system("cls");
-
-	for (int y = 0; y < g_gridHeight; y++)
+	if (m_DisplayGrid)
 	{
-		for (int x = 0; x < g_gridWith; x++)
+		system("cls");
+
+		for (int y = 0; y < g_gridHeight; y++)
 		{
-			GridElement gridElement = m_GridMap[x + y * g_gridWith];
-			std::cout << gridElement.m_Color << gridElement.m_TypeID << RESET << " ";
+			for (int x = 0; x < g_gridWith; x++)
+			{
+				GridElement gridElement = m_GridMap[x + y * g_gridWith];
+				std::cout << gridElement.m_Color << gridElement.m_TypeID << RESET << " ";
+			}
+			std::cout << '\n';
 		}
-		std::cout << '\n';
 	}
 }
 

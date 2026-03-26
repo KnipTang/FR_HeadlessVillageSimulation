@@ -9,13 +9,10 @@
 #include "Grid/Grid.h"
 #include "Scene/Scene.h"
 #include <iostream>
-#include <thread>
-#include <atomic>
-#include <mutex>
 
 std::unique_ptr<Rev::Scene> Scene1()
 {
-	std::unique_ptr<Grid> grid = std::make_unique<Grid>();
+	std::unique_ptr<Grid> grid = std::make_unique<Grid>(true);
 
 	//Scene add gameobects & return
 	{
