@@ -56,6 +56,14 @@ void Scene::FixedUpdate(float fixedDeltaTime)
 	}
 }
 
+void Rev::Scene::Render()
+{
+	for (auto&& obj : m_AllGameObjects)
+	{
+		if (obj->IsActive()) obj->Render();
+	}
+}
+
 void Scene::SetActive(bool active)
 {
 	m_Active = active;

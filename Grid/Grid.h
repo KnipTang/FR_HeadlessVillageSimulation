@@ -1,11 +1,15 @@
 #pragma once
 #include "../GameObjects/GameObject.h"
+#include "GridConsoleColors.h"
+#include "GridConfig.h"
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 namespace Rev {
 	class Scene;
+	struct Position;
 }
 
 class ElementManager;
@@ -24,6 +28,7 @@ public:
 	Grid& operator=(Grid&& other) = default;
 
 	virtual void Update(float deltaTime) override;
+	virtual void Render() override;
 
 	//void AddToGrid(const BaseElement* element);
 
@@ -35,14 +40,14 @@ private:
 
 	bool m_DisplayGrid;
 
+	bool m_UpdateGridRender;
+	float m_CurrentTimeRender;
+	float m_UpdateGridRenderTime;
+
+	GridElement m_GridMap[g_gridWidth * g_gridHeight]{};
+	std::vector<Rev::Position> m_NonEmptyPositions;
+
 private:
 	void DisplayGrid();
-	void DisplayThreadFunction();
-
-	std::thread m_DisplayThread;
-	std::mutex m_GridMutex;
-	std::condition_variable m_CV;
-	std::atomic<bool> m_StopThread{ false };
-	std::atomic<bool> m_ShouldRefresh{ false };
 };
 

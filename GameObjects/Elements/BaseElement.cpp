@@ -5,7 +5,7 @@ BaseElement::BaseElement(unsigned char typeID, const char* gridColor) :
 	GameObject(),
 	m_GridElement{ typeID, gridColor }
 {
-
+	transform->SetPosition({ -1,-1 });
 }
 
 //BaseElement::BaseElement(unsigned char typeID) :

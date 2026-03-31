@@ -91,6 +91,18 @@ void GameObject::FixedUpdate(float fixeDeltaTime)
 	}
 }
 
+void Rev::GameObject::Render()
+{
+	for (auto&& comp : m_Components)
+	{
+		comp->Render();
+	}
+	for (auto&& obj : m_Children)
+	{
+		obj->Render();
+	}
+}
+
 GameObject* Rev::GameObject::AddChild(std::unique_ptr<GameObject> childObj)
 {
 	childObj->SetParent(this);
@@ -108,9 +120,8 @@ GameObject* Rev::GameObject::AddChild(std::unique_ptr<GameObject> childObj)
 void GameObject::SetActive(bool active)
 {
 	m_Active = active;
-	Rev::Rev_CoreSystems::pSceneManager->GetActiveScenes();
-	if (active)
-		Rev::Rev_CoreSystems::pSceneManager->GetActiveScenes().at(0)->AddActiveGameObject(this);
-	else
-		Rev::Rev_CoreSystems::pSceneManager->GetActiveScenes().at(0)->RemoveActiveGameObject(this);
+	//if (active)
+	//	Rev::Rev_CoreSystems::pSceneManager->GetActiveScenes().at(0)->AddActiveGameObject(this);
+	//else
+	//	Rev::Rev_CoreSystems::pSceneManager->GetActiveScenes().at(0)->RemoveActiveGameObject(this);
 }

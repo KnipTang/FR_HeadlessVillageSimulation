@@ -21,11 +21,13 @@ namespace Rev
 		SceneManager();
 		~SceneManager();
 
-		void Init();
+		virtual void Init();
 
-		void Update(float deltaTime);
-		void LateUpdate(float deltaTime);
-		void FixedUpdate(float fixedDeltaTime);
+		virtual void Update(float deltaTime);
+		virtual void LateUpdate(float deltaTime);
+		virtual void FixedUpdate(float fixedDeltaTime);
+
+		virtual void Render();
 
 		const Scene* AddScene(std::unique_ptr<Scene> scene);
 

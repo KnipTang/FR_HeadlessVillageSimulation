@@ -1,5 +1,6 @@
 #pragma once
 #include "BaseElement.h"
+#include <mutex>
 
 class ResourceElement : public BaseElement
 {
@@ -19,5 +20,6 @@ protected:
 private:
 	std::function<void()> m_OnCollect;
 
+	std::mutex m_CollectMutex;
 };
 

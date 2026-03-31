@@ -6,98 +6,105 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#define NOMINMAX
+#include <windows.h>
+#include "../SimulationConfig.h"
 
 // Class that represents a simple thread pool
-class ThreadPool {
-public:
-    // // Constructor to creates a thread pool with given
-    // number of threads
-    ThreadPool(size_t num_threads
-        = std::thread::hardware_concurrency())
+namespace Rev
+{
+    class ThreadPool 
     {
+    public:
+        // // Constructor to creates a thread pool with given
+        // number of threads
+        ThreadPool(size_t num_threads
+            = std::thread::hardware_concurrency())
+        {
+            // Creating worker threads
+            for (size_t i = 0; i < num_threads; ++i) {
+                m_Threads.emplace_back([this] {
+                    while (true) {
+                        std::function<void()> task;
+                        // The reason for putting the below code
+                        // here is to unlock the queue before
+                        // executing the task so that other
+                        // threads can perform enqueue tasks
+                        {
+                            // Locking the queue so that data
+                            // can be shared safely
+                            std::unique_lock<std::mutex> lock(
+                                m_QueueMutex);
 
-        // Creating worker threads
-        for (size_t i = 0; i < num_threads; ++i) {
-            threads_.emplace_back([this] {
-                while (true) {
-                    std::function<void()> task;
-                    // The reason for putting the below code
-                    // here is to unlock the queue before
-                    // executing the task so that other
-                    // threads can perform enqueue tasks
-                    {
-                        // Locking the queue so that data
-                        // can be shared safely
-                        std::unique_lock<std::mutex> lock(
-                            queue_mutex_);
+                            // Waiting until there is a task to
+                            // execute or the pool is stopped
+                            m_CV.wait(lock, [this] {
+                                return !m_Tasks.empty() || m_Stop;
+                                });
+                            // exit the thread in case the pool
+                            // is stopped and there are no tasks
+                            if (m_Stop && m_Tasks.empty()) {
+                                return;
+                            }
 
-                        // Waiting until there is a task to
-                        // execute or the pool is stopped
-                        cv_.wait(lock, [this] {
-                            return !tasks_.empty() || stop_;
-                            });
-
-                        // exit the thread in case the pool
-                        // is stopped and there are no tasks
-                        if (stop_ && tasks_.empty()) {
-                            return;
+                            // Get the next task from the queue
+                            task = move(m_Tasks.front());
+                            m_Tasks.pop();
                         }
 
-                        // Get the next task from the queue
-                        task = move(tasks_.front());
-                        tasks_.pop();
+                        task();
                     }
-
-                    task();
-                }
                 });
+            }
         }
-    }
 
-    // Destructor to stop the thread pool
-    ~ThreadPool()
-    {
+        // Destructor to stop the thread pool
+        ~ThreadPool()
         {
-            // Lock the queue to update the stop flag safely
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            stop_ = true;
+            {
+                // Lock the queue to update the stop flag safely
+                std::unique_lock<std::mutex> lock(m_QueueMutex);
+                m_Stop = true;
+            }
+
+            // Notify all threads
+            m_CV.notify_all();
+
+            // Joining all worker threads to ensure they have
+            // completed their tasks
+            for (auto& thread : m_Threads) {
+                thread.join();
+            }
         }
 
-        // Notify all threads
-        cv_.notify_all();
-
-        // Joining all worker threads to ensure they have
-        // completed their tasks
-        for (auto& thread : threads_) {
-            thread.join();
-        }
-    }
-
-    // Enqueue task for execution by the thread pool
-    void enqueue(std::function<void()> task)
-    {
+        // Enqueue task for execution by the thread pool
+        void Enqueue(std::function<void()> task)
         {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            tasks_.emplace(move(task));
+            {
+                std::unique_lock<std::mutex> lock(m_QueueMutex);
+                m_Tasks.emplace(move(task));
+            }
+            m_CV.notify_one();
         }
-        cv_.notify_one();
-    }
 
-private:
-    // Vector to store worker threads
-    std::vector<std::thread> threads_;
+        size_t ThreadCount() const { return m_Threads.size(); }
 
-    // Queue of tasks
-    std::queue<std::function<void()> > tasks_;
+    private:
+        // Vector to store worker threads
+        std::vector<std::thread> m_Threads;
 
-    // Mutex to synchronize access to shared data
-    std::mutex queue_mutex_;
+        // Queue of tasks
+        std::queue<std::function<void()> > m_Tasks;
 
-    // Condition variable to signal changes in the state of
-    // the tasks queue
-    std::condition_variable cv_;
+        // Mutex to synchronize access to shared data
+        std::mutex m_QueueMutex;
 
-    // Flag to indicate whether the thread pool should stop
-    // or not
-    bool stop_ = false;
-};
+        // Condition variable to signal changes in the state of
+        // the tasks queue
+        std::condition_variable m_CV;
+
+        // Flag to indicate whether the thread pool should stop
+        // or not
+        bool m_Stop = false;
+    };
+}

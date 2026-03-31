@@ -13,6 +13,7 @@ ResourceElement::~ResourceElement()
 
 void ResourceElement::OnCollect()
 {
+	std::unique_lock<std::mutex> pLock(m_CollectMutex);
 	m_OnCollect();
 }
 

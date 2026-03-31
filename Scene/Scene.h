@@ -24,11 +24,13 @@ namespace Rev
 		Scene(std::string tag);
 		~Scene();
 
-		void Init();
+		virtual void Init();
 
-		void Update(float deltaTime);
-		void LateUpdate(float deltaTime);
-		void FixedUpdate(float fixedDeltaTime);
+		virtual void Update(float deltaTime);
+		virtual void LateUpdate(float deltaTime);
+		virtual void FixedUpdate(float fixedDeltaTime);
+
+		virtual void Render();
 
 		template<gameObjectConcept T>
 		T* AddGameObject(std::unique_ptr<T> gameObj)
@@ -94,32 +96,10 @@ namespace Rev
 		void SetActive(bool active);
 		bool IsActive() { return m_Active; }
 
-		void AddActiveGameObject(GameObject* object)
-		{
-			if (!IsGameObjectActive(object))
-				m_ActiveGameObjects.emplace_back(object);
-		}
-		void RemoveActiveGameObject(GameObject* object)
-		{
-			if (IsGameObjectActive(object))
-				m_ActiveGameObjects.erase(std::find(m_ActiveGameObjects.begin(), m_ActiveGameObjects.end(), object));
-		}
-	private:
-		bool IsGameObjectActive(GameObject* object)
-		{
-			for (const auto& actObject : m_ActiveGameObjects)
-			{
-				if (actObject == object)
-					return true;
-			}
-			return false;
-		}
-
 	public:
 		std::string m_Tag;
 	private:
 		std::vector<std::unique_ptr<GameObject>> m_AllGameObjects;
-		std::vector<GameObject*> m_ActiveGameObjects;
 
 		bool m_Active;
 

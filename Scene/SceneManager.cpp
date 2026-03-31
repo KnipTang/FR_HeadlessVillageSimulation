@@ -47,6 +47,14 @@ void SceneManager::FixedUpdate(float fixedDeltaTime)
 	}
 }
 
+void Rev::SceneManager::Render()
+{
+	for (auto&& scene : m_ActiveScenes)
+	{
+		scene->Render();
+	}
+}
+
 const Scene* SceneManager::AddScene(std::unique_ptr<Scene> scene)
 {
 	m_AllScenes.emplace_back(std::move(scene));

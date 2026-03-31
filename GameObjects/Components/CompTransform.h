@@ -17,15 +17,15 @@ namespace Rev
 		static Position GetRandomPositionInGrid()
 		{
 			int posX = uniform_dist_width(dre);
-			int posY = uniform_dist_width(dre);
+			int posY = uniform_dist_height(dre);
 
 			return Position{ posX, posY };
 		}
 
 		Position& operator=(const Position& value)
 		{
-			x = std::clamp(value.x, 0, g_gridWith);
-			y = std::clamp(value.y, 0, g_gridWith);
+			x = std::clamp(value.x, 0, g_gridWidth);
+			y = std::clamp(value.y, 0, g_gridHeight);
 			return *this;
 		}
 

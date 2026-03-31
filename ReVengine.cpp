@@ -3,6 +3,7 @@
 #include <thread>
 #include "Scene/SceneManager.h"
 #include <iostream>
+#define NOMINMAX
 #include <windows.h>
 #include "SimulationConfig.h"
 
@@ -18,14 +19,25 @@ ReVengine::ReVengine()
 
 ReVengine::~ReVengine()
 {
+	{
+		std::lock_guard<std::mutex> lock(m_RenderMutex);
+		m_StopThread = true;
+	}
+	m_CV.notify_one();
 
+	if (m_RenderThread.joinable())
+	{
+		m_RenderThread.join();
+	}
 }
 
 void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 {
-	SceneManager* sceneMan = GameRun();
+	m_SceneMan = GameRun();
 
-	sceneMan->Init();
+	m_RenderThread = std::thread(&ReVengine::RenderThreadFunction, this);
+
+	m_SceneMan->Init();
 
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	float lag = 0.0f;
@@ -48,14 +60,20 @@ void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 
 		while (lag >= fixedTimeStep)
 		{
-			sceneMan->FixedUpdate(fixedTimeStep);
+			m_SceneMan->FixedUpdate(fixedTimeStep);
 
 			lag -= fixedTimeStep;
 		}
 
-		sceneMan->Update(deltaTime);
+		m_SceneMan->Update(deltaTime);
 
-		sceneMan->LateUpdate(deltaTime);
+		m_SceneMan->LateUpdate(deltaTime);
+
+		{
+			std::lock_guard<std::mutex> lock(m_RenderMutex);
+			m_ShouldRefresh = true;
+		}
+		m_CV.notify_one();
 
 		{
 			// FPS calculation
@@ -70,16 +88,34 @@ void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 				sprintf_s(buffer, "FPS: %d | Target: %d\n", static_cast<int>(currentFPS), fps);
 				OutputDebugStringA(buffer);  // View in Visual Studio Output window or DebugView
 
-
 				// Reset counters
 				frameCount = 0;
 				fpsTimer = 0.0f;
 			}
 		}
 
-		burnCPU(0.03f);
-
 		const auto sleepTime = currentTime + targetFrameTime - std::chrono::high_resolution_clock::now();
 		std::this_thread::sleep_for(sleepTime);
+	}
+}
+
+void Rev::ReVengine::RenderThreadFunction()
+{
+	while (true)
+	{
+		std::unique_lock<std::mutex> lock(m_RenderMutex);
+
+		m_CV.wait(lock, [this] {
+			return m_ShouldRefresh.load() || m_StopThread.load();
+			});
+
+		if (m_StopThread)
+		{
+			break;
+		}
+
+		m_ShouldRefresh = false;
+
+		m_SceneMan->Render();
 	}
 }

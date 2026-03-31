@@ -9,7 +9,8 @@
 #include <concepts>
 #include <type_traits>
 #include <thread>
-
+#include "../../Threads/ThreadConfig.h"
+#define NOMINMAX
 enum class CycleState
 {
 	Day,
@@ -19,7 +20,10 @@ enum class CycleState
 class BaseElement;
 class HouseElement;
 
-class ThreadPool;
+namespace Rev
+{
+	class ThreadPool;
+}
 
 template <class T>
 concept ResourceElementConcept = std::derived_from<T, ResourceElement>;
@@ -41,14 +45,15 @@ public:
 
 	std::vector<BaseElement*>& GetElements() { return m_Elements; };
 	std::vector<ResourceElement*>& GetFiniteResources() { return m_FiniteResources; };
+	std::vector<HouseElement*>& GetHouseResources() { return m_HouseResources; };
 
 	const CycleState& GetCycleState() const { return m_CycleState; };
 
 	template <ResourceElementConcept T>
-	void SetClosestResourceForAgent(std::vector<T*>& resourceElems, AgentElement& agent)
+	void SetClosestResourceForAgent(std::vector<T*>& resourceElems, AgentElement& agent, bool bis = true)
 	{
 		ResourceElement* closestResource = nullptr;
-		float closestDistance = FLT_MAX;
+		int closestDistance = INT_MAX;
 		Rev::Position agentPos = agent.transform->GetLocalPosition();
 
 		for (ResourceElement* resource : resourceElems)
@@ -58,7 +63,7 @@ public:
 
 			Rev::Position resourcePos = resource->transform->GetLocalPosition();
 
-			float distance = abs(resourcePos.x - agentPos.x) + abs(resourcePos.y - agentPos.y);
+			int distance = abs(resourcePos.x - agentPos.x) + abs(resourcePos.y - agentPos.y);
 
 			if (distance < closestDistance)
 			{
@@ -69,15 +74,35 @@ public:
 
 		if (closestResource)
 		{
-			agent.SetCurrentResourceTarget(closestResource);
-			closestResource->SetTargetedByAgent(true);
+			if (bis)
+			{
+				SetClosestAgentToResource(m_Agents, *closestResource, false);
+			}
+			else
+			{
+				std::unique_lock<std::mutex> pLock(m_FindMutex);
+				if (!closestResource || closestResource->IsTargetedByAgent() || !closestResource->IsActive())
+				{
+					pLock.unlock();
+					SetClosestResourceForAgent(resourceElems, agent);
+					return;
+				}
+
+				if (ResourceElement* currentTarget = agent.GetCurrentResourceTarget())
+				{
+					closestResource->SetTargetedByAgent(false);
+				}
+
+				closestResource->SetTargetedByAgent(true);
+				agent.SetCurrentResourceTarget(closestResource);
+			}
 		}
 	}
 
-	void SetClosestAgentToResource(std::vector<AgentElement*>& agents, ResourceElement& resourceElem)
+	void SetClosestAgentToResource(std::vector<AgentElement*>& agents, ResourceElement& resourceElem, bool bis = true)
 	{
 		AgentElement* closestAgent = nullptr;
-		float closestDistance = FLT_MAX;
+		int closestDistance = INT_MAX;
 		Rev::Position resourceElemPos = resourceElem.transform->GetLocalPosition();
 
 		for (AgentElement* Agent : agents)
@@ -87,7 +112,7 @@ public:
 
 			Rev::Position AgentPos = Agent->transform->GetLocalPosition();
 
-			float distance = abs(AgentPos.x - resourceElemPos.x) + abs(AgentPos.y - resourceElemPos.y);
+			int distance = abs(AgentPos.x - resourceElemPos.x) + abs(AgentPos.y - resourceElemPos.y);
 
 			if (distance < closestDistance)
 			{
@@ -98,69 +123,104 @@ public:
 
 		if (closestAgent)
 		{
-			closestAgent->SetCurrentResourceTarget(&resourceElem);
-			resourceElem.SetTargetedByAgent(true);
+			std::unique_lock<std::mutex> pLock(m_FindMutex);
+			if (!closestAgent || closestAgent->HasCurrentResourceTarget() || resourceElem.IsTargetedByAgent() || !resourceElem.IsActive())
+			{
+				pLock.unlock();
+				SetClosestAgentToResource(agents, resourceElem);
+				return;
+			}
+
+			if (ResourceElement* currentTarget = closestAgent->GetCurrentResourceTarget())
+			{
+				currentTarget->SetTargetedByAgent(false);
+			}
+				resourceElem.SetTargetedByAgent(true);
+				closestAgent->SetCurrentResourceTarget(&resourceElem);
 		}
 	}
+
+	void ResetSlotOnElementMap(Rev::Position pos);
 private:
-	//virtual BaseElement* AddElement(BaseElement* element);
-	//virtual void RemoveElement(BaseElement* element);
 
 	virtual void StartMorning();
 	virtual void StartNight();
 	virtual void EndDayCycle();
 
 	template <ResourceElementConcept T>
-	void SpawnResources(std::vector<T*>& resourceElems)
+	void SpawnResources(std::vector<T*>& resourceElems, size_t resourcesOnOneThread)
 	{
-		std::unique_lock<std::mutex> lock(
-			m_PlaceElementMutex);
-
-		for (auto& elem : resourceElems)
+		//m_PlaceElementMutex.lock();
+		for (size_t t = 0; t < g_ResourceThreadCount; t++)
 		{
-			elem->SetTargetedByAgent(false);
+			size_t start = t * resourcesOnOneThread;
+			size_t end = std::min(start + resourcesOnOneThread, resourceElems.size());
 
-			elem->SetActive(true);
+			m_pThreadPoolPtr->Enqueue([this, &resourceElems, start, end]() {
+				for (size_t i = start; i < end; i++)
+				{
+					resourceElems[i]->SetTargetedByAgent(false);
 
-				m_PlaceElementsThreadPool.get()->enqueue([this, elem]() {
-					PlaceElementOnRandomGridPosition(*elem);
-				});
+					resourceElems[i]->SetActive(true);
+
+					PlaceElementOnRandomGridPosition(*resourceElems[i]);
+				}
+			});
 		}
-		m_PlaceElementCV.notify_one();
+		//m_PlaceElementMutex.unlock();
+
+		//for (auto& elem : resourceElems)
+		//{
+		//	elem->SetTargetedByAgent(false);
+
+		//	elem->SetActive(true);
+
+		//	m_pThreadPoolPtr->Enqueue([this, elem]() {
+		//		PlaceElementOnRandomGridPosition(*elem);
+		//	});
+		//}
 	}
 	virtual void RemoveFiniteResources();
 
 	template <ResourceElementConcept T>
-	void FindClosestResourcesForAllAgents(std::vector<T*>& resourceElems)
+	void FindClosestResourcesForAllAgents(std::vector<T*>& resourceElems, size_t resourcesOnOneThread)
 	{
 		if (m_Agents.empty() || resourceElems.empty())
 			return;
 
-		for (size_t t = 0; t < m_NumAgentThreads; ++t)
+		if (m_Agents.size() >= resourceElems.size() && !std::is_same_v<T, HouseElement>)
 		{
-			size_t start = t * m_AgentOnOneThreadCount;
-			size_t end = std::min(start + m_AgentOnOneThreadCount, m_Agents.size());
+			for (size_t t = 0; t < g_ResourceThreadCount; t++)
+			{
+				size_t start = t * resourcesOnOneThread;
+				size_t end = std::min(start + resourcesOnOneThread, resourceElems.size());
 
-			m_AgentThreadPool.get()->enqueue([this, &resourceElems, start, end]() {
-				for (size_t i = start; i < end; ++i)
-				{
-					SetClosestResourceForAgent(resourceElems, *m_Agents[i]);
-				}
-			});
+				m_pThreadPoolPtr->Enqueue([this, &resourceElems, start, end]() {
+					for (size_t i = start; i < end; i++)
+					{
+						T& elem = *resourceElems[i];
+						//if (elem.IsTargetedByAgent() || !elem.IsActive())
+						//	continue;
+						SetClosestAgentToResource(m_Agents, elem);
+					}
+				});
+			}
 		}
-		//if (!m_PlaceElementMutex.try_lock())
-		//{
+		else
+		{
+			for (size_t t = 0; t < g_AgentThreadCount; t++)
+			{
+				size_t start = t * m_AgentOnOneThreadCount;
+				size_t end = std::min(start + m_AgentOnOneThreadCount, m_Agents.size());
 
-		//std::unique_lock<std::mutex> lock(
-		//	m_PlaceElementMutex);
-
-		//m_PlaceElementCV.wait(lock);
-		//}
-
-		//for (ResourceElement* elem : resourceElems)
-		//{
-		//	SetClosestAgentToResource(m_Agents, *elem);
-		//}
+				m_pThreadPoolPtr->Enqueue([this, &resourceElems, start, end]() {
+					for (size_t i = start; i < end; i++)
+					{
+						SetClosestResourceForAgent(resourceElems, *m_Agents[i]);
+					}
+				});
+			}
+		}
 	}
 
 	virtual void PlaceElementOnRandomGridPosition(BaseElement& element);
@@ -170,19 +230,24 @@ private:
 	std::vector<HouseElement*> m_HouseResources;
 	std::vector<AgentElement*> m_Agents;
 
-	unsigned char m_ElementMap[g_gridWith * g_gridHeight];
+	unsigned char m_ElementMap[g_gridWidth * g_gridHeight];
 
 	CycleState m_CycleState;
 
-	int m_CurrentCycleTime;
+	float m_CurrentCycleTime;
 
 private:
-	std::unique_ptr<ThreadPool> m_AgentThreadPool;
-	unsigned char m_NumAgentThreads;
-	int m_AgentOnOneThreadCount = 2;
+	Rev::ThreadPool* m_pThreadPoolPtr;
 
-	std::unique_ptr<ThreadPool> m_PlaceElementsThreadPool;
+	int m_AgentOnOneThreadCount;
+	int m_FiniteOnOneThreadCount;
+	int m_HousesOnOneThreadCount;
+
+	std::mutex m_FindMutex;
+
 	std::mutex m_PlaceElementMutex;
 	std::condition_variable m_PlaceElementCV;
+	int m_AvailableSlots;  // Track available grid cells
+	bool m_Stop = false;
 };
 

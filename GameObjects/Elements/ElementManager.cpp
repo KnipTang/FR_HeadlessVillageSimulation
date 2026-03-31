@@ -9,17 +9,19 @@ ElementManager::ElementManager() :
 	Rev::GameObject(),
 	m_ElementMap{},
 	m_CycleState{ CycleState::Night },
-	m_CurrentCycleTime{}
+	m_CurrentCycleTime{},
+	m_PlaceElementMutex{}
 {
+	if (g_AgentsCount + g_FiniteResourcesCount + g_HousesCount > g_gridWidth * g_gridHeight)
+	{
+		throw std::runtime_error("More elements than there is slots on the grid");
+	}
 
-	m_NumAgentThreads = std::min(
-		static_cast<size_t>(std::thread::hardware_concurrency()),
-		(static_cast<size_t>(g_AgentsCount) + m_AgentOnOneThreadCount - 1) / m_AgentOnOneThreadCount
-	);
+	m_AgentOnOneThreadCount = static_cast<int>(std::ceil(static_cast<double>(g_AgentsCount) / g_AgentThreadCount));
+	m_FiniteOnOneThreadCount = static_cast<int>(std::ceil(static_cast<double>(g_FiniteResourcesCount) / g_ResourceThreadCount));
+	m_HousesOnOneThreadCount = static_cast<int>(std::ceil(static_cast<double>(g_HousesCount) / g_ResourceThreadCount));
 
-	m_AgentThreadPool = std::make_unique<ThreadPool>(m_NumAgentThreads);
-
-	m_PlaceElementsThreadPool = std::make_unique<ThreadPool>(g_AgentsCount + g_FiniteResourcesCount + g_HousesCount);
+	m_pThreadPoolPtr = Rev::Rev_CoreSystems::pThreadPool.get();
 
 	for (int i = 0; i < g_FiniteResourcesCount; i++)
 	{
@@ -27,24 +29,33 @@ ElementManager::ElementManager() :
 
 		ResourceElement* resElemPtr = m_FiniteResources.back();
 
-		resElemPtr->SetOnCollectFunc([resElemPtr]() {
+		resElemPtr->SetActive(false);
+
+		resElemPtr->SetOnCollectFunc([resElemPtr, this]() {
 			resElemPtr->SetActive(false);
+			Rev::Position pos = resElemPtr->transform->GetLocalPosition();
+			ResetSlotOnElementMap(pos);
 		});
 
 		m_Elements.emplace_back(resElemPtr);
 	}
 
-	for (int i = 0; i < g_AgentsCount; i++)
+	for (size_t t = 0; t < g_AgentThreadCount; ++t)
 	{
-		m_Agents.emplace_back(dynamic_cast<AgentElement*>(AddChild(std::make_unique<AgentElement>(*this, g_AgentID, YELLOW))));
+		size_t start = t * m_AgentOnOneThreadCount;
+		size_t end = std::min(start + m_AgentOnOneThreadCount, static_cast<size_t>(g_AgentsCount));
 
-		AgentElement* agentPtr = m_Agents.back();
+		m_pThreadPoolPtr->Enqueue([this, start, end]() {
+		for (size_t i = start; i < end; ++i)
+		{
+			m_Agents.emplace_back(dynamic_cast<AgentElement*>(AddChild(std::make_unique<AgentElement>(*this, g_AgentID, YELLOW))));
+			AgentElement* agentPtr = m_Agents.back();
 
-		m_PlaceElementsThreadPool.get()->enqueue([this, agentPtr]() {
 			PlaceElementOnRandomGridPosition(*agentPtr);
-		});
 
-		m_Elements.emplace_back(agentPtr);
+			m_Elements.emplace_back(agentPtr);
+		}
+		});
 	}
 
 	for (int i = 0; i < g_HousesCount; i++)
@@ -55,9 +66,10 @@ ElementManager::ElementManager() :
 
 		houseElemPtr->SetOnCollectFunc([houseElemPtr]() {
 			houseElemPtr->IncreaseCapacity();
-			if (houseElemPtr->GetCapacity() == g_HouseCapacity)
+			if (houseElemPtr->GetCapacity() >= g_HouseCapacity)
 			{
-				houseElemPtr->SetActive(false);
+				//houseElemPtr->SetTargetedByAgent(false);
+				//houseElemPtr->SetActive(false);
 			}
 		});
 
@@ -67,12 +79,16 @@ ElementManager::ElementManager() :
 
 ElementManager::~ElementManager()
 {
-
+	{
+		std::unique_lock<std::mutex> lock(m_PlaceElementMutex);
+		m_Stop = true;
+	}
+	m_PlaceElementCV.notify_all();
 }
 
 void ElementManager::Init()
 {
-	SpawnResources(m_HouseResources);
+	SpawnResources(m_HouseResources, m_HousesOnOneThreadCount);
 }
 
 void ElementManager::UpdateElements(float currentTime)
@@ -97,35 +113,63 @@ void ElementManager::UpdateElements(float currentTime)
 		m_CurrentCycleTime = 0;
 	}
 
-	for (size_t t = 0; t < m_NumAgentThreads; ++t)
+	for (size_t t = 0; t < g_AgentThreadCount; ++t)
 	{
 		size_t start = t * m_AgentOnOneThreadCount;
 		size_t end = std::min(start + m_AgentOnOneThreadCount, m_Agents.size());
 
-		m_AgentThreadPool.get()->enqueue([this, start, end]() {
+		m_pThreadPoolPtr->Enqueue([this, start, end]() {
 			for (size_t i = start; i < end; ++i)
 			{
-				m_Agents[i]->UpdateMovement();
+				AgentElement* agent = m_Agents.at(i);
+				if(agent->IsActive())
+					agent->UpdateMovement();
 			}
 		});
 	}
 }
 
+void ElementManager::ResetSlotOnElementMap(Rev::Position pos)
+{
+	m_ElementMap[pos.x + pos.y * g_gridWidth] = 0;
+}
+
 void ElementManager::StartMorning()
 {
-	SpawnResources(m_FiniteResources);
-	FindClosestResourcesForAllAgents(m_FiniteResources);
+	//std::thread spawnThread([this]() {
+	SpawnResources(m_FiniteResources, m_FiniteOnOneThreadCount);
+	//	});
+	//spawnThread.detach();
+	FindClosestResourcesForAllAgents(m_FiniteResources, m_FiniteOnOneThreadCount);
 }
 
 void ElementManager::StartNight()
 {
+	for (AgentElement* agent : m_Agents)
+	{
+		agent->SetCurrentResourceTarget(nullptr);
+	}
 	RemoveFiniteResources();
-	FindClosestResourcesForAllAgents(m_HouseResources);
+	FindClosestResourcesForAllAgents(m_HouseResources, m_HousesOnOneThreadCount);
 }
 
 void ElementManager::EndDayCycle()
 {
-
+	for (ResourceElement* elem : m_FiniteResources)
+	{
+		elem->SetTargetedByAgent(false);
+	}
+	for (HouseElement* house : m_HouseResources)
+	{
+		house->SetTargetedByAgent(false);
+		house->SetAgentsTargettingCount(0);
+		house->SetCapacity(0);
+	}
+	for (AgentElement* agent : m_Agents)
+	{
+		agent->SetCurrentResourceTarget(nullptr);
+		agent->SetIsInHouse(false);
+	}
 }
 
 void ElementManager::RemoveFiniteResources()
@@ -133,6 +177,8 @@ void ElementManager::RemoveFiniteResources()
 	for (auto& finElem : m_FiniteResources)
 	{
 		finElem->SetActive(false);
+		Rev::Position pos = finElem->transform->GetLocalPosition();
+		ResetSlotOnElementMap(pos);
 	}
 }
 
@@ -140,15 +186,29 @@ void ElementManager::PlaceElementOnRandomGridPosition(BaseElement& element)
 {
 	Rev::Position pos = Rev::Position::GetRandomPositionInGrid();
 
-	unsigned char* elementID = &m_ElementMap[pos.x + pos.y * g_gridWith];
+	unsigned char* elementID = &m_ElementMap[pos.x + pos.y * g_gridWidth];
+
+	//std::unique_lock<std::mutex> lock(
+	//	m_PlaceElementMutex);
+	m_PlaceElementMutex.lock();
+	//m_PlaceElementCV.wait(lock, [this] {
+	//	return m_PlacementDone || m_Stop;
+	//	});
+	//m_PlacementDone = false;
 
 	if (*elementID == 0)
 	{
 		element.transform->SetPosition(pos);
 		*elementID = element.GetGridElement().m_TypeID;
+	//	m_PlacementDone = true;
+		m_PlaceElementMutex.unlock();
+	//	m_PlaceElementCV.notify_one();
 	}
 	else
 	{
+	//	m_PlacementDone = true;
+		m_PlaceElementMutex.unlock();
+	//	m_PlaceElementCV.notify_one();
 		PlaceElementOnRandomGridPosition(element);
 	}
 }

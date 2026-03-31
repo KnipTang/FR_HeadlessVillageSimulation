@@ -1,6 +1,8 @@
 #include "HouseElement.h"
 #include "../../SimulationConfig.h"
 #include <algorithm>
+#include <iostream>
+#include <windows.h>
 
 HouseElement::HouseElement(unsigned char typeID, const char* gridColor) :
 	ResourceElement(typeID, gridColor),
@@ -32,8 +34,17 @@ void HouseElement::SetActive(bool active)
 	//	SetGridElement({ GetGridElement().m_TypeID, BGRED });
 }
 
-void HouseElement::IncreaseAgentsTargettingCount(unsigned char amount)
+void HouseElement::IncreaseCapacity()
+{
+	m_Capacity++;
+	m_Capacity = std::clamp(m_Capacity, static_cast<signed char>(0), static_cast<signed char>(m_Capacity));
+	//std::cout << GetID() << ": " << static_cast<int>(m_Capacity) << "\n";
+}
+
+void HouseElement::IncreaseAgentsTargettingCount(signed char amount)
 {
 	m_AgentsTargettingCount += amount; 
-	m_AgentsTargettingCount = std::clamp(m_AgentsTargettingCount, static_cast<signed char>(0), static_cast<signed char>(g_HouseCapacity));
+	if (m_AgentsTargettingCount < 0)
+		m_AgentsTargettingCount = 0;
+	//m_AgentsTargettingCount = std::clamp(m_AgentsTargettingCount, static_cast<std::atomic<signed char>>(0), static_cast<std::atomic<signed char>>(g_HouseCapacity));
 }

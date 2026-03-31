@@ -1,5 +1,6 @@
 #pragma once
 #include "ResourceElement.h"
+#include <atomic>
 
 class HouseElement : public ResourceElement
 {
@@ -11,17 +12,17 @@ public:
 
 	virtual void SetActive(bool active) override;
 
-	inline void SetCapacity(unsigned char capacity) { m_Capacity = capacity; }
-	inline void IncreaseCapacity() { m_Capacity++; }
-	inline unsigned char GetCapacity() const { return m_Capacity; }
+	inline void SetCapacity(signed char capacity) { m_Capacity = capacity; }
+	void IncreaseCapacity();
+	inline signed char GetCapacity() const { return m_Capacity; }
 
-	void SetAgentsTargettingCount(unsigned char agentsTargettingCount) { m_AgentsTargettingCount = agentsTargettingCount; }
-	void IncreaseAgentsTargettingCount(unsigned char amount);
-	unsigned char GetAgentsTargettingCount() const { return m_AgentsTargettingCount; }
+	void SetAgentsTargettingCount(signed char agentsTargettingCount) { m_AgentsTargettingCount = agentsTargettingCount; }
+	void IncreaseAgentsTargettingCount(signed char amount);
+	signed char GetAgentsTargettingCount() const { return m_AgentsTargettingCount; }
 
 private:
-	unsigned char m_Capacity;
+	signed char m_Capacity;
 
-	signed char m_AgentsTargettingCount;
+	std::atomic<signed char> m_AgentsTargettingCount;
 };
 

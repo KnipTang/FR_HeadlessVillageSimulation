@@ -35,6 +35,8 @@ namespace Rev
 		virtual void LateUpdate(float deltaTime);
 		virtual void FixedUpdate(float fixedDeltaTime);
 
+		virtual void Render();
+
 		void Destroy() { m_ToDestroy = true; }
 		bool ToBeDestroyed() { return m_ToDestroy; }
 
