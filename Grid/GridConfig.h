@@ -1,8 +1,8 @@
 #pragma once
 #include <random>
 
-inline constexpr int g_gridWidth = 20;
-inline constexpr int g_gridHeight = 20;
+inline constexpr int g_gridWidth = 4;
+inline constexpr int g_gridHeight = 4;
 
 static std::random_device rd;
 static std::default_random_engine dre(rd());

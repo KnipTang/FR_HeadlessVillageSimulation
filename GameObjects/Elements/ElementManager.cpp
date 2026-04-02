@@ -40,20 +40,25 @@ ElementManager::ElementManager() :
 		m_Elements.emplace_back(resElemPtr);
 	}
 
+	for (size_t i = 0; i < g_AgentsCount; i++)
+	{
+		m_Agents.emplace_back(dynamic_cast<AgentElement*>(AddChild(std::make_unique<AgentElement>(*this, g_AgentID, YELLOW))));
+		AgentElement* agentPtr = m_Agents.back();
+
+		m_Elements.emplace_back(agentPtr);
+	}
+
 	for (size_t t = 0; t < g_AgentThreadCount; ++t)
 	{
 		size_t start = t * m_AgentOnOneThreadCount;
 		size_t end = std::min(start + m_AgentOnOneThreadCount, static_cast<size_t>(g_AgentsCount));
 
+		//std::unique_lock<std::mutex> pLock(m_PlaceElementMutex);
+
 		m_pThreadPoolPtr->Enqueue([this, start, end]() {
 		for (size_t i = start; i < end; ++i)
 		{
-			m_Agents.emplace_back(dynamic_cast<AgentElement*>(AddChild(std::make_unique<AgentElement>(*this, g_AgentID, YELLOW))));
-			AgentElement* agentPtr = m_Agents.back();
-
-			PlaceElementOnRandomGridPosition(*agentPtr);
-
-			m_Elements.emplace_back(agentPtr);
+			PlaceElementOnRandomGridPosition(*m_Agents[i]);
 		}
 		});
 	}

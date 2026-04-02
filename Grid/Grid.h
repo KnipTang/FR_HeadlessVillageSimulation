@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <atomic>
 
 namespace Rev {
 	class Scene;
@@ -40,7 +41,7 @@ private:
 
 	bool m_DisplayGrid;
 
-	bool m_UpdateGridRender;
+	std::atomic<bool> m_UpdateGridRender;
 	float m_CurrentTimeRender;
 	float m_UpdateGridRenderTime;
 
@@ -48,6 +49,10 @@ private:
 	std::vector<Rev::Position> m_NonEmptyPositions;
 
 private:
+	int m_TotalCells;
+	std::string m_DisplayBuffer;
+private:
+	void UpdateGridMap();
 	void DisplayGrid();
 };
 

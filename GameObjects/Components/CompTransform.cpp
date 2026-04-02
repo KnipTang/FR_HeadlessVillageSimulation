@@ -12,11 +12,6 @@ CompTransform::CompTransform(GameObject* gameObj, Position position) :
 	SetPosition(position);
 }
 
-void CompTransform::Update([[maybe_unused]] float deltaTime)
-{
-
-}
-
 void CompTransform::Move(Position dir, int steps)
 {
 	SetPosition(m_LocalPosition + (dir * steps));

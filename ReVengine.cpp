@@ -40,9 +40,9 @@ void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 	m_SceneMan->Init();
 
 	auto lastTime = std::chrono::high_resolution_clock::now();
-	float lag = 0.0f;
+	//float lag = 0.0f;
 
-	const float fixedTimeStep = 1.0f / fps;
+//	const float fixedTimeStep = 1.0f / fps;
 
 	constexpr auto targetFrameTime = std::chrono::milliseconds(static_cast<long long>(MS_PER_FRAME(fps)));
 
@@ -56,18 +56,18 @@ void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 		const auto currentTime = std::chrono::high_resolution_clock::now();
 		const float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
 		lastTime = currentTime;
-		lag += deltaTime;
+		//lag += deltaTime;
 
-		while (lag >= fixedTimeStep)
-		{
-			m_SceneMan->FixedUpdate(fixedTimeStep);
+		//while (lag >= fixedTimeStep)
+		//
+			//m_SceneMan->FixedUpdate(fixedTimeStep);
 
-			lag -= fixedTimeStep;
-		}
+//lag -= fixedTimeStep;
+		//}
 
 		m_SceneMan->Update(deltaTime);
 
-		m_SceneMan->LateUpdate(deltaTime);
+		//m_SceneMan->LateUpdate(deltaTime);
 
 		{
 			std::lock_guard<std::mutex> lock(m_RenderMutex);
@@ -101,7 +101,7 @@ void ReVengine::Run(const std::function<SceneManager*()>& GameRun)
 
 void Rev::ReVengine::RenderThreadFunction()
 {
-	while (true)
+	while (m_SceneMan->IsRenderingEnabled())
 	{
 		std::unique_lock<std::mutex> lock(m_RenderMutex);
 

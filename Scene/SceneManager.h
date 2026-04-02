@@ -71,7 +71,8 @@ namespace Rev
 
 		const int GetID() { return m_SceneManagerID; }
 
-
+		const bool IsRenderingEnabled() const { return m_EnableRendering; }
+		void SetRenderingEnabled(const bool enabled) { m_EnableRendering = enabled; }
 	private:
 		bool IsSceneActive(Scene* scene)
 		{
@@ -88,5 +89,7 @@ namespace Rev
 
 		static int s_SceneManagerIDCounter;
 		int m_SceneManagerID;
+
+		bool m_EnableRendering;
 	};
 }

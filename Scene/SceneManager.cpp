@@ -7,7 +7,8 @@ using namespace Rev;
 int SceneManager::s_SceneManagerIDCounter = 0;
 
 SceneManager::SceneManager() :
-	m_SceneManagerID{ s_SceneManagerIDCounter++ }
+	m_SceneManagerID{ s_SceneManagerIDCounter++ },
+	m_EnableRendering{true}
 {
 }
 

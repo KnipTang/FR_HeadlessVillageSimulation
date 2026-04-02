@@ -12,7 +12,11 @@
 
 std::unique_ptr<Rev::Scene> Scene1()
 {
-	std::unique_ptr<Grid> grid = std::make_unique<Grid>(true);
+	Rev::Rev_CoreSystems::pSceneManager->SetRenderingEnabled(false);
+
+	std::unique_ptr<Grid> grid = std::make_unique<Grid>(
+		Rev::Rev_CoreSystems::pSceneManager->IsRenderingEnabled()
+	);
 
 	//Scene add gameobects & return
 	{

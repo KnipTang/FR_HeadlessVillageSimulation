@@ -66,8 +66,6 @@ namespace Rev
 		CompTransform(GameObject* gameObj, Position position = {0,0});
 		~CompTransform() {};
 
-		void Update([[maybe_unused]] float deltaTime) override;
-
 		void SetPosition(int x, int y);
 		void SetPosition(Position pos);
 		Position& GetWorldPosition();

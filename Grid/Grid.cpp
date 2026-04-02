@@ -11,13 +11,17 @@
 
 Grid::Grid(bool displayGrid) :
 	m_CurrentTime{},
-	m_UpdateGridTime{1.f},
+	m_UpdateGridTime{.2f},
 	m_DisplayGrid{ displayGrid },
 	m_UpdateGridRender{},
-	m_UpdateGridRenderTime{0.5f},
+	m_UpdateGridRenderTime{0.1f},
 	m_NonEmptyPositions{}
 {
 	m_ElementManager = dynamic_cast<ElementManager*>(AddChild(std::make_unique<ElementManager>()));
+
+	m_TotalCells = g_gridHeight * g_gridWidth;
+	const int avgCellLength = 12; // Approximate: color(5-8) + type(1-2) + reset(4) + space(1)
+	m_DisplayBuffer.reserve(m_TotalCells * avgCellLength + g_gridHeight);
 }
 
 Grid::~Grid()
@@ -44,12 +48,14 @@ void Grid::Update(float deltaTime)
 
 	if (m_CurrentTimeRender >= m_UpdateGridRenderTime)
 	{
+		if (m_DisplayGrid)
+			UpdateGridMap();
 		m_UpdateGridRender = true;
 
 		m_CurrentTimeRender = 0;
 	}
 
-	GameObject::Update(deltaTime);
+	//GameObject::Update(deltaTime);
 }
 
 void Grid::Render()
@@ -61,7 +67,7 @@ void Grid::Render()
 	}
 }
 
-void Grid::DisplayGrid()
+void Grid::UpdateGridMap()
 {
 	for (Rev::Position& elemPos : m_NonEmptyPositions)
 	{
@@ -96,28 +102,28 @@ void Grid::DisplayGrid()
 			m_GridMap[elemPos.x + elemPos.y * g_gridWidth] = elem->GetGridElement();
 		}
 	}
+}
 
+void Grid::DisplayGrid()
+{
 	if (m_DisplayGrid)
 	{
-		system("cls");
+		std::cout << "\033[2J\033[H";
 
-		const int totalCells = g_gridHeight * g_gridWidth;
-		const int avgCellLength = 12; // Approximate: color(5-8) + type(1-2) + reset(4) + space(1)
-		std::string buffer;
-		buffer.reserve(totalCells * avgCellLength + g_gridHeight);
+		m_DisplayBuffer.clear();
 
 		int rowEnd = g_gridWidth;
-		for (int i = 0; i < totalCells; i++)
+		for (int i = 0; i < m_TotalCells; i++)
 		{
 			const GridElement& element = m_GridMap[i];
 
 			// Append color string
-			buffer.append(element.m_Color);
+			m_DisplayBuffer.append(element.m_Color);
 
 			// Convert int to string without allocation
 			int num = element.m_TypeID;
 			if (num == 0)
-				buffer += '0';
+				m_DisplayBuffer += '0';
 			else
 			{
 				char digits[4];
@@ -128,18 +134,18 @@ void Grid::DisplayGrid()
 					num /= 10;
 				}
 				while (count > 0)
-					buffer += digits[--count];
+					m_DisplayBuffer += digits[--count];
 			}
 
 			// Append reset and separator
-			buffer.append(RESET);
-			buffer += ((i + 1) == rowEnd) ? '\n' : ' ';
+			m_DisplayBuffer.append(RESET);
+			m_DisplayBuffer += ((i + 1) == rowEnd) ? '\n' : ' ';
 
 			if ((i + 1) == rowEnd)
 				rowEnd += g_gridWidth;
 		}
 
-		std::cout << buffer;
+		std::cout << m_DisplayBuffer;
 		std::cout << static_cast<int>(m_ElementManager->GetCycleState()) << '\n';
 	}
 }
