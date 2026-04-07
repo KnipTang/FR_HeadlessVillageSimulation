@@ -141,7 +141,7 @@ namespace Rev
 		const GameObject* GetParent() { return m_Parent; }
 
 		virtual void SetActive(bool active);
-		bool IsActive() { return m_Active; }
+		bool IsActive() const { return m_Active; }
 
 		void SetTag(std::string tag) { m_Tag = tag;  }
 	private:

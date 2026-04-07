@@ -7,7 +7,7 @@
 
 ElementManager::ElementManager() :
 	Rev::GameObject(),
-	m_ElementMap{},
+	//m_ElementMap{},
 	m_CycleState{ CycleState::Night },
 	m_CurrentCycleTime{},
 	m_PlaceElementMutex{}
@@ -34,10 +34,11 @@ ElementManager::ElementManager() :
 		resElemPtr->SetOnCollectFunc([resElemPtr, this]() {
 			resElemPtr->SetActive(false);
 			Rev::Position pos = resElemPtr->transform->GetLocalPosition();
-			ResetSlotOnElementMap(pos);
+			ResetSlotOnElementMap(pos, resElemPtr);
 		});
 
-		m_Elements.emplace_back(resElemPtr);
+		//Rev::Position pos = resElemPtr->transform->GetLocalPosition();
+		//m_Elements[pos.x + pos.y * g_gridWidth] = resElemPtr;
 	}
 
 	for (size_t i = 0; i < g_AgentsCount; i++)
@@ -45,7 +46,8 @@ ElementManager::ElementManager() :
 		m_Agents.emplace_back(dynamic_cast<AgentElement*>(AddChild(std::make_unique<AgentElement>(*this, g_AgentID, YELLOW))));
 		AgentElement* agentPtr = m_Agents.back();
 
-		m_Elements.emplace_back(agentPtr);
+		//Rev::Position pos = agentPtr->transform->GetLocalPosition();
+		//m_Elements[pos.x + pos.y * g_gridWidth] = agentPtr;
 	}
 
 	for (size_t t = 0; t < g_AgentThreadCount; ++t)
@@ -71,6 +73,9 @@ ElementManager::ElementManager() :
 
 		houseElemPtr->SetOnCollectFunc([houseElemPtr]() {
 			houseElemPtr->IncreaseCapacity();
+			char buffer[256];
+			sprintf_s(buffer, "Cap: %d\n", static_cast<int>(houseElemPtr->GetCapacity()));
+			OutputDebugStringA(buffer);  // View in Visual Studio Output window or DebugView
 			if (houseElemPtr->GetCapacity() >= g_HouseCapacity)
 			{
 				//houseElemPtr->SetTargetedByAgent(false);
@@ -78,7 +83,8 @@ ElementManager::ElementManager() :
 			}
 		});
 
-		m_Elements.emplace_back(houseElemPtr);
+		//Rev::Position pos = houseElemPtr->transform->GetLocalPosition();
+		//m_Elements[pos.x + pos.y * g_gridWidth] = houseElemPtr;
 	}
 }
 
@@ -116,6 +122,7 @@ void ElementManager::UpdateElements(float currentTime)
 	{
 		EndDayCycle();
 		m_CurrentCycleTime = 0;
+		return;
 	}
 
 	for (size_t t = 0; t < g_AgentThreadCount; ++t)
@@ -134,9 +141,18 @@ void ElementManager::UpdateElements(float currentTime)
 	}
 }
 
-void ElementManager::ResetSlotOnElementMap(Rev::Position pos)
+void ElementManager::ResetSlotOnElementMap(Rev::Position pos, BaseElement* element)
 {
-	m_ElementMap[pos.x + pos.y * g_gridWidth] = 0;
+	int index = pos.x + pos.y * g_gridWidth;
+	if (m_Elements[index] == element)
+		m_Elements[index] = nullptr;
+}
+
+void ElementManager::SetSlotOnElementMap(Rev::Position pos, BaseElement* element)
+{
+	int index = pos.x + pos.y * g_gridWidth;
+	if (m_Elements[index] == nullptr)
+		m_Elements[index] = element;
 }
 
 void ElementManager::StartMorning()
@@ -183,7 +199,7 @@ void ElementManager::RemoveFiniteResources()
 	{
 		finElem->SetActive(false);
 		Rev::Position pos = finElem->transform->GetLocalPosition();
-		ResetSlotOnElementMap(pos);
+		ResetSlotOnElementMap(pos, finElem);
 	}
 }
 
@@ -191,7 +207,7 @@ void ElementManager::PlaceElementOnRandomGridPosition(BaseElement& element)
 {
 	Rev::Position pos = Rev::Position::GetRandomPositionInGrid();
 
-	unsigned char* elementID = &m_ElementMap[pos.x + pos.y * g_gridWidth];
+	int index = pos.x + pos.y * g_gridWidth;
 
 	//std::unique_lock<std::mutex> lock(
 	//	m_PlaceElementMutex);
@@ -201,10 +217,10 @@ void ElementManager::PlaceElementOnRandomGridPosition(BaseElement& element)
 	//	});
 	//m_PlacementDone = false;
 
-	if (*elementID == 0)
+	if (m_Elements[index] == nullptr)
 	{
 		element.transform->SetPosition(pos);
-		*elementID = element.GetGridElement().m_TypeID;
+		m_Elements[index] = &element;
 	//	m_PlacementDone = true;
 		m_PlaceElementMutex.unlock();
 	//	m_PlaceElementCV.notify_one();

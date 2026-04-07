@@ -20,7 +20,9 @@ void HouseElement::SetTargetedByAgent(const bool isTargeted)
 {
 	isTargeted ? IncreaseAgentsTargettingCount(1) : IncreaseAgentsTargettingCount(-1);
 
-	if (m_AgentsTargettingCount >= g_HouseCapacity)
+	signed char currentCount = m_AgentsTargettingCount.load();
+
+	if (currentCount >= g_HouseCapacity)
 		m_IsTargettedByAgent = true;
 	else
 		m_IsTargettedByAgent = false;
@@ -36,15 +38,21 @@ void HouseElement::SetActive(bool active)
 
 void HouseElement::IncreaseCapacity()
 {
-	m_Capacity++;
-	m_Capacity = std::clamp(m_Capacity, static_cast<signed char>(0), static_cast<signed char>(m_Capacity));
+	signed char oldCapacity = m_Capacity.load();
+	signed char newCapacity = oldCapacity + 1;
+
+	m_Capacity.store(newCapacity);
 	//std::cout << GetID() << ": " << static_cast<int>(m_Capacity) << "\n";
 }
 
 void HouseElement::IncreaseAgentsTargettingCount(signed char amount)
 {
-	m_AgentsTargettingCount += amount; 
-	if (m_AgentsTargettingCount < 0)
-		m_AgentsTargettingCount = 0;
+	signed char oldValue = m_AgentsTargettingCount.load();
+	signed char newValue = oldValue + amount;
+
+	if (newValue < 0) newValue = 0;
+
+	m_AgentsTargettingCount.store(newValue);
+
 	//m_AgentsTargettingCount = std::clamp(m_AgentsTargettingCount, static_cast<std::atomic<signed char>>(0), static_cast<std::atomic<signed char>>(g_HouseCapacity));
 }

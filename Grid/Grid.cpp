@@ -11,7 +11,7 @@
 
 Grid::Grid(bool displayGrid) :
 	m_CurrentTime{},
-	m_UpdateGridTime{.2f},
+	m_UpdateGridTime{1.f},
 	m_DisplayGrid{ displayGrid },
 	m_UpdateGridRender{},
 	m_UpdateGridRenderTime{0.1f},
@@ -75,31 +75,21 @@ void Grid::UpdateGridMap()
 	}
 	m_NonEmptyPositions.clear();
 
-	for (const auto& elem : m_ElementManager->GetElements())
-	{
-		if (!elem->IsActive())
+	const BaseElement* const* elements = m_ElementManager->GetElements();
+	for (int i = 0; i < g_gridWidth * g_gridHeight; i++) {
+		const BaseElement* element = elements[i];
+		if (element == nullptr)
 			continue;
 
-		Rev::Position elemPos = elem->transform->GetLocalPosition();
+		if (!element->IsActive())
+			continue;
+
+		Rev::Position elemPos = element->transform->GetLocalPosition();
 		if (elemPos.x >= 0 && elemPos.x < g_gridWidth &&
 			elemPos.y >= 0 && elemPos.y < g_gridHeight)
 		{
 			m_NonEmptyPositions.emplace_back(elemPos);
-			m_GridMap[elemPos.x + elemPos.y * g_gridWidth] = elem->GetGridElement();
-		}
-	}
-
-	for (const auto& elem : m_ElementManager->GetHouseResources())
-	{
-		if (!elem->IsActive())
-			continue;
-
-		Rev::Position elemPos = elem->transform->GetLocalPosition();
-		if (elemPos.x >= 0 && elemPos.x < g_gridWidth &&
-			elemPos.y >= 0 && elemPos.y < g_gridHeight)
-		{
-			m_NonEmptyPositions.emplace_back(elemPos);
-			m_GridMap[elemPos.x + elemPos.y * g_gridWidth] = elem->GetGridElement();
+			m_GridMap[elemPos.x + elemPos.y * g_gridWidth] = element->GetGridElement();
 		}
 	}
 }
@@ -113,9 +103,18 @@ void Grid::DisplayGrid()
 		m_DisplayBuffer.clear();
 
 		int rowEnd = g_gridWidth;
+		const BaseElement* const* elements = m_ElementManager->GetElements();
 		for (int i = 0; i < m_TotalCells; i++)
 		{
-			const GridElement& element = m_GridMap[i];
+			unsigned char typeID{};
+			const char* color{GRAY};
+			if (elements[i] != nullptr)
+			{
+				typeID = elements[i]->GetGridElement().m_TypeID;
+				color = elements[i]->GetGridElement().m_Color;
+			}
+
+			const GridElement& element = GridElement{ typeID, color };
 
 			// Append color string
 			m_DisplayBuffer.append(element.m_Color);

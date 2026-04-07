@@ -12,17 +12,20 @@ public:
 
 	virtual void SetActive(bool active) override;
 
-	inline void SetCapacity(signed char capacity) { m_Capacity = capacity; }
+	void SetCapacity(signed char capacity) { m_Capacity = capacity; }
 	void IncreaseCapacity();
-	inline signed char GetCapacity() const { return m_Capacity; }
+	signed char GetCapacity() const { return m_Capacity; }
 
 	void SetAgentsTargettingCount(signed char agentsTargettingCount) { m_AgentsTargettingCount = agentsTargettingCount; }
 	void IncreaseAgentsTargettingCount(signed char amount);
 	signed char GetAgentsTargettingCount() const { return m_AgentsTargettingCount; }
 
 private:
-	signed char m_Capacity;
+	std::atomic<signed char> m_Capacity;
 
 	std::atomic<signed char> m_AgentsTargettingCount;
+
+	std::mutex m_CapacityLock;
+	std::mutex m_TargettingLock;
 };
 

@@ -31,6 +31,12 @@ concept ResourceElementConcept = std::derived_from<T, ResourceElement>;
 class ElementManager : public Rev::GameObject
 {
 public:
+	struct BaseElementArray
+	{
+		BaseElement** element{};
+		int count{};
+	};
+public:
 	ElementManager();
 	~ElementManager();
 
@@ -43,7 +49,11 @@ public:
 
 	void UpdateElements(float currentTime);
 
-	std::vector<BaseElement*>& GetElements() { return m_Elements; };
+	const BaseElement* GetElementByPosition(int x, int y) const {
+		return m_Elements[x + y * g_gridWidth];
+	}
+	BaseElement* const* GetElements() {return m_Elements;}
+	//std::vector<BaseElement*>& GetElements() { return m_Elements; };
 	std::vector<ResourceElement*>& GetFiniteResources() { return m_FiniteResources; };
 	std::vector<HouseElement*>& GetHouseResources() { return m_HouseResources; };
 
@@ -56,8 +66,12 @@ public:
 		int closestDistance = INT_MAX;
 		Rev::Position agentPos = agent.transform->GetLocalPosition();
 
-		for (ResourceElement* resource : resourceElems)
+		BaseElementArray resourceArray = GetAllElementsAroundPosition(agent.transform->GetLocalPosition(), resourceElems[0]->GetGridElement().m_TypeID);
+
+		for (size_t i = 0; i < resourceArray.count; i++)
 		{
+			T* resource = static_cast<T*>(resourceArray.element[i]);
+
 			if (!resource || resource->IsTargetedByAgent() || !resource->IsActive())
 				continue;
 
@@ -101,23 +115,30 @@ public:
 
 	void SetClosestAgentToResource(std::vector<AgentElement*>& agents, ResourceElement& resourceElem, bool bis = true)
 	{
+		if (resourceElem.IsTargetedByAgent() || !resourceElem.IsActive())
+			return;
+
 		AgentElement* closestAgent = nullptr;
 		int closestDistance = INT_MAX;
 		Rev::Position resourceElemPos = resourceElem.transform->GetLocalPosition();
 
-		for (AgentElement* Agent : agents)
+		BaseElementArray agentsArray = GetAllElementsAroundPosition(resourceElem.transform->GetLocalPosition(), agents[0]->GetGridElement().m_TypeID);
+
+		for (size_t i = 0; i < agentsArray.count; i++)
 		{
-			if (!Agent || Agent->HasCurrentResourceTarget() || resourceElem.IsTargetedByAgent() || !resourceElem.IsActive())
+			AgentElement* agent = static_cast<AgentElement*>(agentsArray.element[i]);
+
+			if (!agent || agent->HasCurrentResourceTarget())
 				continue;
 
-			Rev::Position AgentPos = Agent->transform->GetLocalPosition();
+			Rev::Position AgentPos = agent->transform->GetLocalPosition();
 
 			int distance = abs(AgentPos.x - resourceElemPos.x) + abs(AgentPos.y - resourceElemPos.y);
 
 			if (distance < closestDistance)
 			{
 				closestDistance = distance;
-				closestAgent = Agent;
+				closestAgent = agent;
 			}
 		}
 
@@ -140,12 +161,51 @@ public:
 		}
 	}
 
-	void ResetSlotOnElementMap(Rev::Position pos);
+	void ResetSlotOnElementMap(Rev::Position pos, BaseElement* element);
+	void SetSlotOnElementMap(Rev::Position pos, BaseElement* element);
 private:
 
 	virtual void StartMorning();
 	virtual void StartNight();
 	virtual void EndDayCycle();
+
+	BaseElementArray GetAllElementsAroundPosition(Rev::Position pos, int lookingForTypeID)
+	{
+		const signed char range = 50;
+
+		BaseElementArray foundElements{};
+
+		int maxElements = (range * 2 + 1) * (range * 2 + 1);
+		foundElements.element = new BaseElement * [maxElements]();
+
+		for (signed char i = -range; i < range; i++)
+		{
+			int posX = pos.x + i;
+			if (posX < 0 || posX >= g_gridWidth)
+				continue;
+
+			for (signed char j = -range; j < range; j++)
+			{
+				int posY = pos.y + j;
+
+				if (posY < 0 || posY >= g_gridHeight)
+					continue;
+
+				BaseElement* elem = m_Elements[posX + posY * g_gridWidth];
+
+				if (!elem)
+					continue;
+
+				if (elem->GetGridElement().m_TypeID == lookingForTypeID)
+				{
+					foundElements.element[foundElements.count] = elem;
+					foundElements.count++;
+				}
+			}
+		}
+
+		return foundElements;
+	}
 
 	template <ResourceElementConcept T>
 	void SpawnResources(std::vector<T*>& resourceElems, size_t resourcesOnOneThread)
@@ -225,12 +285,12 @@ private:
 
 	virtual void PlaceElementOnRandomGridPosition(BaseElement& element);
 private:
-	std::vector<BaseElement*> m_Elements;
+	BaseElement* m_Elements[g_gridWidth * g_gridHeight];
 	std::vector<ResourceElement*> m_FiniteResources;
 	std::vector<HouseElement*> m_HouseResources;
 	std::vector<AgentElement*> m_Agents;
 
-	unsigned char m_ElementMap[g_gridWidth * g_gridHeight];
+	//unsigned char m_ElementMap[g_gridWidth * g_gridHeight];
 
 	CycleState m_CycleState;
 

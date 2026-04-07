@@ -1,12 +1,12 @@
 #pragma once
 
-inline constexpr int g_AgentsCount = 500000;
-inline constexpr int g_FiniteResourcesCount = 200000;
-inline constexpr int g_HousesCount = 150000;
+inline constexpr int g_AgentsCount = 50;
+inline constexpr int g_FiniteResourcesCount = 100;
+inline constexpr int g_HousesCount = 15;
 
 //In seconds
 inline constexpr int g_DayTime = 10;
-inline constexpr int g_NightTime = 10;
+inline constexpr int g_NightTime = 30;
 
 inline constexpr unsigned char g_AgentID = 1;
 inline constexpr unsigned char g_FiniteResourceID = 2;

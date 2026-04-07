@@ -84,14 +84,16 @@ void AgentElement::MoveToTarget()
 
 void AgentElement::MoveRight(signed char direction)
 {
-    m_ElementManager.ResetSlotOnElementMap(transform->GetLocalPosition());
+    m_ElementManager.ResetSlotOnElementMap(transform->GetLocalPosition(), this);
 	transform->Move(Rev::Position{ direction, 0 });
+    m_ElementManager.SetSlotOnElementMap(transform->GetLocalPosition(), this);
 }
 
 void AgentElement::MoveUp(signed char direction)
 {
-    m_ElementManager.ResetSlotOnElementMap(transform->GetLocalPosition());
+    m_ElementManager.ResetSlotOnElementMap(transform->GetLocalPosition(), this);
 	transform->Move(Rev::Position{ 0, direction });
+    m_ElementManager.SetSlotOnElementMap(transform->GetLocalPosition(), this);
 }
 
 void AgentElement::ResourceCollected()
@@ -100,6 +102,13 @@ void AgentElement::ResourceCollected()
     m_CurrentResourceTarget = nullptr;
 
     m_CollectedFiniteResourcesCount++;
+
+    m_ElementManager.SetSlotOnElementMap(transform->GetLocalPosition(), this);
+
+    if (m_ElementManager.GetCycleState() == CycleState::Night)
+    {
+        m_InHouse = true;
+    }
 
    // std::stringstream ss;
    // ss << "Agent: " << GetID();
@@ -117,8 +126,9 @@ void AgentElement::FindNewFiniteResource()
     if (m_ElementManager.GetCycleState() == CycleState::Night)
     {
         if (!m_InHouse)
+        {
             m_InHouse = true;
-        else
             m_ElementManager.SetClosestResourceForAgent(m_ElementManager.GetHouseResources(), *this);
+        }
     }
 }

@@ -12,7 +12,7 @@
 
 std::unique_ptr<Rev::Scene> Scene1()
 {
-	Rev::Rev_CoreSystems::pSceneManager->SetRenderingEnabled(false);
+	Rev::Rev_CoreSystems::pSceneManager->SetRenderingEnabled(true);
 
 	std::unique_ptr<Grid> grid = std::make_unique<Grid>(
 		Rev::Rev_CoreSystems::pSceneManager->IsRenderingEnabled()
